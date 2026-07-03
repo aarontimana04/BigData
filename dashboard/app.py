@@ -36,10 +36,10 @@ def cassandra_query(query: str, params: tuple) -> pd.DataFrame:
 
 try:
     total_mongo = mongo_event_count(selected_date_text)
-    kpis = cassandra_query("SELECT * FROM kpis_by_day WHERE event_date = %s", (selected_date_text,))
+    kpis = cassandra_query("SELECT * FROM kpis_by_day WHERE event_date = %s", (selected_date,))
     events = cassandra_query(
         "SELECT event_type, event_hour, total_events FROM events_by_day_type WHERE event_date = %s",
-        (selected_date_text,),
+        (selected_date,),
     )
 
     c1, c2, c3 = st.columns(3)
