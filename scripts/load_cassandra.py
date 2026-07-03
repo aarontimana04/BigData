@@ -1,12 +1,16 @@
 import argparse
 import json
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from cassandra.cluster import Cluster
 
 from config import CASSANDRA_HOST, CASSANDRA_KEYSPACE, CASSANDRA_PORT
+
+
+def to_cassandra_date(value: str) -> date:
+    return date.fromisoformat(value)
 
 
 def get_session():
@@ -56,11 +60,7 @@ def aggregate_events(input_path: Path):
     return events_by_day_type, repo_activity, actor_activity, day_summary
 
 
-def load_to_cassandra(input_path: Path) -> None:
-    cluster, session = get_session()
-
-    events_by_day_type, repo_activity, actor_activity, day_summary = aggregate_events(input_path)
-
+def create_tables(session) -> None:
     session.execute(
         """
         CREATE TABLE IF NOT EXISTS events_by_day_type (
@@ -112,13 +112,20 @@ def load_to_cassandra(input_path: Path) -> None:
         """
     )
 
+
+def load_to_cassandra(input_path: Path) -> None:
+    cluster, session = get_session()
+    create_tables(session)
+
+    events_by_day_type, repo_activity, actor_activity, day_summary = aggregate_events(input_path)
+
     for (event_date, event_type, event_hour), total in events_by_day_type.items():
         session.execute(
             """
             INSERT INTO events_by_day_type (event_date, event_type, event_hour, total_events)
             VALUES (%s, %s, %s, %s)
             """,
-            (event_date, event_type, event_hour, total),
+            (to_cassandra_date(event_date), event_type, event_hour, total),
         )
 
     for (event_date, repo_name, event_type), values in repo_activity.items():
@@ -127,7 +134,7 @@ def load_to_cassandra(input_path: Path) -> None:
             INSERT INTO repo_activity_by_day (event_date, repo_name, event_type, total_events, unique_actors)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (event_date, repo_name, event_type, values["total_events"], len(values["actors"])),
+            (to_cassandra_date(event_date), repo_name, event_type, values["total_events"], len(values["actors"])),
         )
 
     for (event_date, actor_login), counts in actor_activity.items():
@@ -139,7 +146,7 @@ def load_to_cassandra(input_path: Path) -> None:
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                event_date,
+                to_cassandra_date(event_date),
                 actor_login,
                 counts["total_events"],
                 counts["PushEvent"],
@@ -160,7 +167,7 @@ def load_to_cassandra(input_path: Path) -> None:
             ) VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
-                event_date,
+                to_cassandra_date(event_date),
                 values["total"],
                 len(values["actors"]),
                 len(values["repos"]),
