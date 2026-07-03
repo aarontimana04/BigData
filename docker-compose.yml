@@ -93,6 +93,32 @@ services:
       - airflow-init
     command: bash -c "pip install -r /requirements.txt && airflow scheduler"
 
+  streamlit:
+    image: python:3.11-slim
+    container_name: bigdata_streamlit
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - cassandra
+    ports:
+      - "8501:8501"
+    environment:
+      LOCAL_RAW_DIR: /app/data/raw
+      LOCAL_PROCESSED_DIR: /app/data/processed
+      MONGO_URI: mongodb://admin:admin@mongodb:27017/?authSource=admin
+      MONGO_DATABASE: github_events
+      MONGO_COLLECTION: github_events_raw
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_PORT: 9042
+      CASSANDRA_KEYSPACE: github_events
+    volumes:
+      - ./dashboard:/app/dashboard
+      - ./scripts:/app/scripts
+      - ./data:/app/data
+      - ./requirements.txt:/requirements.txt
+    working_dir: /app
+    command: bash -c "pip install -r /requirements.txt && streamlit run dashboard/app.py --server.address=0.0.0.0 --server.port=8501"
+
 volumes:
   mongo_data:
   cassandra_data:
